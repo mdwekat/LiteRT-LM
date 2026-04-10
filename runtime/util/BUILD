@@ -255,6 +255,7 @@ cc_test(
     srcs = ["file_util_test.cc"],
     deps = [
         ":file_util",
+        ":test_utils",
         "@com_google_googletest//:gtest_main",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",

@@ -17,6 +17,7 @@
 
 #include <string>
 
+#include "absl/status/status.h"  // from @com_google_absl
 #include "absl/status/statusor.h"  // from @com_google_absl
 #include "absl/strings/string_view.h"  // from @com_google_absl
 
@@ -37,6 +38,20 @@ absl::string_view Basename(absl::string_view path);
 //
 // TODO: b/419286976 - Support Windows. This currently assumes POSIX paths.
 absl::string_view Dirname(absl::string_view path);
+
+// Returns a unique identifier for the file based on its metadata (timestamp
+// + file size).
+absl::StatusOr<std::string> GetFileCacheIdentifier(absl::string_view path);
+
+// Returns true if the file exists.
+bool FileExists(absl::string_view path);
+
+// Deletes all stale cache files for a given model and suffix layout.
+// Any file starting with model_basename + suffix but not matching the exact
+// layout will be deleted.
+absl::Status DeleteStaleCaches(absl::string_view cache_dir,
+                               absl::string_view model_path,
+                               absl::string_view suffix);
 
 }  // namespace litert::lm
 

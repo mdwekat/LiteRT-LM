@@ -14,13 +14,17 @@
 
 #include "runtime/util/file_util.h"
 
+#include <fstream>
 #include <string>
+#include <vector>
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include "absl/status/status.h"  // from @com_google_absl
 #include "absl/strings/str_cat.h"  // from @com_google_absl
+#include "absl/strings/str_split.h"  // from @com_google_absl
 #include "absl/strings/string_view.h"  // from @com_google_absl
+#include "runtime/util/test_utils.h"  // IWYU pragma: keep
 
 namespace litert::lm {
 namespace {
@@ -60,6 +64,88 @@ TEST(FileUtilTest, Dirname) {
   EXPECT_THAT(Dirname(model_path),
               absl::StrCat(kPathSeparator, "path", kPathSeparator, "to",
                            kPathSeparator));
+}
+
+TEST(FileUtilTest, GetFileCacheIdentifier) {
+  ASSERT_OK_AND_ASSIGN(auto temp_file,
+                       JoinPath(testing::TempDir(), "test_file.txt"));
+  std::ofstream ofs(temp_file);
+  ofs << "test data";
+  ofs.close();
+
+  ASSERT_OK_AND_ASSIGN(auto id, GetFileCacheIdentifier(temp_file));
+  // Split the ID into {timestamp}_{filesize}. We avoid using MatchesRegex
+  // because gtest's simplified regex engine on Windows doesn't support
+  // character classes.
+  std::vector<std::string> parts = absl::StrSplit(id, '_');
+  ASSERT_EQ(parts.size(), 2);
+
+  // The first part is the last modified timestamp, which can be negative in
+  // some environments.
+  absl::string_view ts = parts[0];
+  if (ts.starts_with('-')) {
+    ts.remove_prefix(1);
+  }
+  EXPECT_FALSE(ts.empty());
+  for (char c : ts) {
+    EXPECT_TRUE(c >= '0' && c <= '9');
+  }
+
+  // The second part is the file size. "test data" is exactly 9 bytes.
+  EXPECT_EQ(parts[1], "9");
+
+  EXPECT_FALSE(GetFileCacheIdentifier("non_existent_file").ok());
+}
+
+TEST(FileUtilTest, FileExists) {
+  ASSERT_OK_AND_ASSIGN(auto temp_file,
+                       JoinPath(testing::TempDir(), "exists_test.txt"));
+  EXPECT_FALSE(FileExists(temp_file));
+
+  std::ofstream ofs(temp_file);
+  ofs << "data";
+  ofs.close();
+
+  EXPECT_TRUE(FileExists(temp_file));
+}
+
+TEST(FileUtilTest, DeleteStaleCaches) {
+  std::string temp_dir = testing::TempDir();
+  std::string model_name = "test_model.tflite";
+  ASSERT_OK_AND_ASSIGN(auto model_path, JoinPath(temp_dir, model_name));
+
+  std::ofstream model_ofs(model_path);
+  model_ofs << "model data";
+  model_ofs.close();
+
+  ASSERT_OK_AND_ASSIGN(auto id, GetFileCacheIdentifier(model_path));
+  std::string identifier = absl::StrCat("_", id);
+
+  ASSERT_OK_AND_ASSIGN(
+      auto valid_cache,
+      JoinPath(temp_dir, absl::StrCat(model_name, ".suffix", identifier)));
+  std::ofstream valid_ofs(valid_cache);
+  valid_ofs << "valid cache";
+  valid_ofs.close();
+
+  ASSERT_OK_AND_ASSIGN(
+      auto stale_cache,
+      JoinPath(temp_dir, absl::StrCat(model_name, ".suffix_stale")));
+  std::ofstream stale_ofs(stale_cache);
+  stale_ofs << "stale cache";
+  stale_ofs.close();
+
+  ASSERT_OK_AND_ASSIGN(auto unrelated, JoinPath(temp_dir, "unrelated.txt"));
+  std::ofstream unrelated_ofs(unrelated);
+  unrelated_ofs << "unrelated data";
+  unrelated_ofs.close();
+
+  EXPECT_TRUE(DeleteStaleCaches(temp_dir, model_path, ".suffix").ok());
+
+  EXPECT_TRUE(FileExists(model_path));
+  EXPECT_TRUE(FileExists(valid_cache));
+  EXPECT_FALSE(FileExists(stale_cache));
+  EXPECT_TRUE(FileExists(unrelated));
 }
 
 }  // namespace
