@@ -29,6 +29,7 @@ cc_library(
     hdrs = ["audio_executor_settings.h"],
     deps = [
         ":executor_settings_base",
+        "@com_google_absl//absl/log:absl_log",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
@@ -57,6 +58,7 @@ cc_library(
     hdrs = ["vision_executor_settings.h"],
     deps = [
         ":executor_settings_base",
+        "@com_google_absl//absl/log:absl_log",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
@@ -83,6 +85,8 @@ cc_library(
     srcs = ["executor_settings_base.cc"],
     hdrs = ["executor_settings_base.h"],
     deps = [
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/log:absl_log",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
@@ -104,6 +108,7 @@ cc_test(
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings:string_view",
         "//runtime/util:file_data_stream",
+        "//runtime/util:file_util",
         "//runtime/util:memory_mapped_file",
         "//runtime/util:test_utils",
     ],

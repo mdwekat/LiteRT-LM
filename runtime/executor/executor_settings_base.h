@@ -20,6 +20,7 @@
 #include <optional>
 #include <string>
 #include <utility>
+#include <variant>
 
 #include "absl/status/status.h"  // from @com_google_absl
 #include "absl/status/statusor.h"  // from @com_google_absl
@@ -167,6 +168,34 @@ std::ostream& operator<<(std::ostream& os, const ModelAssets& model_assets);
 // Base Settings for the executor modules.
 class ExecutorSettingsBase {
  public:
+  // Holds centralized cache suffixes and keys for different backend topologies.
+  struct CacheSuffix {
+    std::string weight_suffix;            // For CPU (XNNPACK)
+    std::string program_suffix;           // For GPU (MlDrift) program cache
+    std::string gpu_weight_cache_suffix;  // For GPU (MlDrift) weight cache key
+  };
+
+  static constexpr absl::string_view kXnnpackCacheSuffix = ".xnnpack_cache";
+  static constexpr absl::string_view kMlDriftCacheSuffix =
+      "_mldrift_program_cache.bin";
+
+  // Dynamically generates cache suffix and keys systematically.
+  // Args:
+  //   - backend: The target backend topology. Valid values are Backend::CPU and
+  //   Backend::GPU.
+  //   - model_path: The absolute path to the modality main model file.
+  //   - module_name: The optional sub-module identifier. Valid values are empty
+  //   string (""),
+  //     "vision_encoder", "vision_adapter", "streaming_audio_encoder",
+  //     "audio_adapter", "static_audio_encoder".
+  // Returns:
+  //   - CacheSuffix: Centralized naming extensions.
+  //   - absl::Status: InvalidArgumentError if validation fails on backend or
+  //   module identifiers.
+  static absl::StatusOr<CacheSuffix> GetCacheSuffix(
+      Backend backend, absl::string_view model_path,
+      absl::string_view module_name = "");
+
   virtual ~ExecutorSettingsBase() = default;
 
   // Getter APIs.
@@ -195,7 +224,8 @@ class ExecutorSettingsBase {
   //   3. an error if a weight cache file could not be determined.
   absl::StatusOr<
       std::variant<std::string, std::shared_ptr<litert::lm::ScopedFile>>>
-  GetWeightCacheFile(absl::string_view suffix = ".cache") const;
+  GetWeightCacheFile(absl::string_view suffix = ".cache",
+                     bool check_and_clean = false) const;
   // Prefer to use `GetWeightCacheFile()` if possible.
   const std::string& GetCacheDir() const { return cache_dir_; }
   // Prefer to use `GetWeightCacheFile()` if possible.
@@ -214,7 +244,8 @@ class ExecutorSettingsBase {
   //   3. an error if a program cache file could not be determined.
   absl::StatusOr<
       std::variant<std::string, std::shared_ptr<litert::lm::ScopedFile>>>
-  GetProgramCacheFile(absl::string_view suffix = ".program_cache") const;
+  GetProgramCacheFile(absl::string_view suffix = ".program_cache",
+                      bool check_and_clean = false) const;
   // Prefer to use `GetProgramCacheFile()` if possible.
   std::shared_ptr<litert::lm::ScopedFile> GetScopedProgramCacheFile() const {
     return scoped_program_cache_file_;
