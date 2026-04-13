@@ -169,8 +169,11 @@ absl::AnyInvocable<void(absl::StatusOr<Message>)> CreatePrintMessageCallback(
       std::cout << std::endl << std::flush;
       return;
     }
-    ABSL_CHECK_OK(PrintMessage(*message, captured_output,
-                               /*streaming=*/true));
+    auto status = PrintMessage(*message, captured_output,
+                               /*streaming=*/true);
+    if (!status.ok()) {
+      ABSL_LOG(ERROR) << "Failed to print message: " << status;
+    }
   };
 }
 
@@ -732,9 +735,10 @@ absl::Status RunLiteRtLm(const LiteRtLmSettings& settings,
       ASSIGN_OR_RETURN(session, engine->CreateSession(session_config));
       std::string input_prompt = settings.input_prompt;
       std::string score_target_text = settings.score_target_text.value();
-      ABSL_CHECK_OK(RunScoreText(engine.get(), session.get(), input_prompt,
-                                 {score_target_text},
-                                 /*store_char_and_token_lengths=*/false));
+      RETURN_IF_ERROR(RunScoreText(engine.get(), session.get(), input_prompt,
+                                   {score_target_text},
+                                   /*store_char_and_token_lengths=*/false)
+                          .status());
     } else if (settings.use_session) {
       ABSL_LOG(INFO) << "Creating session";
       ASSIGN_OR_RETURN(session, engine->CreateSession(session_config));
